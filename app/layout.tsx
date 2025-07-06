@@ -1,14 +1,40 @@
-import type { Metadata } from 'next';
+'use client';
 import { Inter } from 'next/font/google';
-import { AuthProvider } from '@/contexts/AuthContext';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import './globals.css';
+import Link from 'next/link';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export const metadata: Metadata = {
-  title: 'InGenium - Business Management & Funding Platform',
-  description: 'Streamline your business with task management, grant discovery, and content creation tools.',
-};
+function Header() {
+  const { user } = useAuth();
+  
+  return (
+    <header>
+      <div className="logo">
+        <img src="/ingeniumlogo.png" alt="InGenium" className="logo-image" />
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/business-hub">Business Hub</a></li>
+          <li><a href="/funding">Funding</a></li>
+          <li><a href="/content-toolkit">Content Tools</a></li>
+          <li><a href="/dashboard">Dashboard</a></li>
+        </ul>
+      </nav>
+      {user ? (
+        <Link href="/account" className="cta-button" style={{ background: '#8a7bff', color: 'white' }}>
+          Account
+        </Link>
+      ) : (
+        <Link href="/dashboard" className="cta-button">
+          Get Started
+        </Link>
+      )}
+    </header>
+  );
+}
 
 export default function RootLayout({
   children,
@@ -17,23 +43,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <title>InGenium - Business Management & Funding Platform</title>
+        <meta name="description" content="Streamline your business with task management, grant discovery, and content creation tools." />
+      </head>
       <body className={inter.className}>
         <AuthProvider>
-          <header>
-            <div className="logo">
-              <img src="/ingeniumlogo.png" alt="InGenium" className="logo-image" />
-            </div>
-            <nav>
-              <ul>
-                <li><a href="/">Home</a></li>
-                <li><a href="/business-hub">Business Hub</a></li>
-                <li><a href="/funding">Funding</a></li>
-                <li><a href="/content-toolkit">Content Tools</a></li>
-                <li><a href="/dashboard">Dashboard</a></li>
-              </ul>
-            </nav>
-            <a href="/dashboard" className="cta-button">Get Started</a>
-          </header>
+          <Header />
           
           <main>
             {children}

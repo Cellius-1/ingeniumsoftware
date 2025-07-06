@@ -1,17 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { grantService } from '@/lib/database';
+import type { Database } from '@/lib/supabase';
 
-interface Grant {
-  id: string;
-  title: string;
-  description: string;
-  amount: string;
-  deadline: string;
-  eligibility: string[];
-  state: string;
-  category: string;
-  url: string;
-}
+type Grant = Database['public']['Tables']['grants']['Row'];
 
 export default function GrantFinder() {
   const [grants, setGrants] = useState<Grant[]>([]);
@@ -44,41 +36,24 @@ export default function GrantFinder() {
   const searchGrants = async () => {
     setLoading(true);
     try {
-      // Mock search for demo - in real app this would call your API
-      const mockGrants = [
-        {
-          id: '1',
-          title: 'Small Business Innovation Research (SBIR)',
-          description: 'Federal funding program for small businesses to engage in Research and Development with the potential for commercialization.',
-          amount: '$50,000 - $1,500,000',
-          deadline: '2024-03-15',
-          eligibility: ['Small business with <500 employees', 'US-based company', 'R&D focus'],
-          state: filters.state || 'National',
-          category: 'Technology',
-          url: 'https://www.sbir.gov'
-        },
-        {
-          id: '2',
-          title: 'State Small Business Credit Initiative',
-          description: 'Program designed to strengthen state programs that support lending to small businesses.',
-          amount: '$10,000 - $500,000',
-          deadline: '2024-04-30',
-          eligibility: ['Small business', 'State-specific requirements', 'Good credit history'],
-          state: filters.state || 'Various States',
-          category: 'Small Business',
-          url: '#'
-        }
-      ];
+      const data = await grantService.getGrants({
+        state: filters.state || undefined,
+        category: filters.category || undefined,
+        search: filters.search || undefined
+      });
       
-      setTimeout(() => {
-        setGrants(mockGrants);
-        setLoading(false);
-      }, 1000);
+      setGrants(data);
     } catch (error) {
       console.error('Error searching grants:', error);
+    } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // Load initial grants
+    searchGrants();
+  }, []);
 
   return (
     <div>
@@ -184,152 +159,157 @@ export default function GrantFinder() {
 
       {/* Results */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        {grants.map((grant) => (
-          <div key={grant.id} style={{
+        {grants.length === 0 && !loading ? (
+          <div style={{
             backgroundColor: 'var(--dark-secondary)',
-            padding: '2rem',
+            padding: '3rem',
             borderRadius: 'var(--border-radius)',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
-            transition: 'transform 0.2s ease'
+            textAlign: 'center',
+            color: 'var(--text-secondary)'
           }}>
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'flex-start', 
-              marginBottom: '1.5rem',
-              flexWrap: 'wrap',
-              gap: '1rem'
-            }}>
-              <h3 style={{ 
-                color: 'var(--text-primary)', 
-                fontSize: '1.25rem', 
-                margin: 0,
-                flex: 1,
-                minWidth: '250px'
-              }}>
-                {grant.title}
-              </h3>
-              <span style={{
-                backgroundColor: '#34c759',
-                color: 'white',
-                padding: '0.5rem 1rem',
-                borderRadius: '20px',
-                fontSize: '0.9rem',
-                fontWeight: '600'
-              }}>
-                {grant.amount}
-              </span>
-            </div>
-            
-            <p style={{ 
-              color: 'var(--text-secondary)', 
-              marginBottom: '1.5rem',
-              lineHeight: 1.6
-            }}>
-              {grant.description}
-            </p>
-            
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-              gap: '1rem', 
-              marginBottom: '1.5rem' 
-            }}>
-              <div>
-                <span style={{ color: 'var(--text-primary)', fontWeight: '600' }}>Deadline:</span>
-                <span style={{ color: 'var(--text-secondary)', marginLeft: '0.5rem' }}>
-                  {grant.deadline}
-                </span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-primary)', fontWeight: '600' }}>State:</span>
-                <span style={{ color: 'var(--text-secondary)', marginLeft: '0.5rem' }}>
-                  {grant.state}
-                </span>
-              </div>
-              <div>
-                <span style={{ color: 'var(--text-primary)', fontWeight: '600' }}>Category:</span>
-                <span style={{ color: 'var(--text-secondary)', marginLeft: '0.5rem' }}>
-                  {grant.category}
-                </span>
-              </div>
-            </div>
-            
-            <div style={{ marginBottom: '1.5rem' }}>
-              <span style={{ color: 'var(--text-primary)', fontWeight: '600' }}>Eligibility:</span>
-              <ul style={{ 
-                listStyle: 'disc',
-                listStylePosition: 'inside',
-                color: 'var(--text-secondary)',
-                marginTop: '0.5rem',
-                paddingLeft: '1rem'
-              }}>
-                {grant.eligibility.map((req, index) => (
-                  <li key={index} style={{ marginBottom: '0.25rem' }}>{req}</li>
-                ))}
-              </ul>
-            </div>
-            
-            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-              <a
-                href={grant.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="cta-button"
-                style={{ margin: 0, textDecoration: 'none' }}
-              >
-                View Details
-              </a>
-              <button style={{
-                padding: '0.75rem 1.5rem',
-                borderRadius: '8px',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                backgroundColor: 'transparent',
-                color: 'var(--text-primary)',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = 'transparent';
-              }}>
-                Save Grant
-              </button>
-            </div>
+            <p>No grants found matching your criteria. Try adjusting your filters.</p>
           </div>
-        ))}
+        ) : (
+          grants.map((grant) => (
+            <div key={grant.id} style={{
+              backgroundColor: 'var(--dark-secondary)',
+              padding: '2rem',
+              borderRadius: 'var(--border-radius)',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+              transition: 'transform 0.2s ease'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'flex-start', 
+                marginBottom: '1.5rem',
+                flexWrap: 'wrap',
+                gap: '1rem'
+              }}>
+                <div style={{ flex: 1, minWidth: '300px' }}>
+                  <h3 style={{ 
+                    color: 'var(--text-primary)', 
+                    fontSize: '1.25rem', 
+                    margin: '0 0 0.75rem 0',
+                    fontWeight: '600'
+                  }}>
+                    {grant.title}
+                  </h3>
+                  <p style={{ 
+                    color: 'var(--text-secondary)', 
+                    lineHeight: 1.6,
+                    margin: '0 0 1rem 0'
+                  }}>
+                    {grant.description}
+                  </p>
+                </div>
+                
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'flex-end',
+                  gap: '0.5rem'
+                }}>
+                  <span style={{
+                    backgroundColor: 'var(--purple-primary)',
+                    color: 'white',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '20px',
+                    fontSize: '0.9rem',
+                    fontWeight: '600'
+                  }}>
+                    {grant.amount}
+                  </span>
+                  
+                  <span style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    color: 'var(--text-primary)',
+                    padding: '0.25rem 0.75rem',
+                    borderRadius: '12px',
+                    fontSize: '0.8rem'
+                  }}>
+                    {grant.category}
+                  </span>
+                </div>
+              </div>
+              
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '1rem'
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                      📍 {grant.state}
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                      ⏰ Deadline: {new Date(grant.deadline).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <button style={{
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    backgroundColor: 'transparent',
+                    color: 'var(--text-primary)',
+                    padding: '0.75rem 1.5rem',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    Save Grant
+                  </button>
+                  
+                  {grant.url && (
+                    <a
+                      href={grant.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="cta-button"
+                      style={{ margin: 0, fontSize: '0.9rem', padding: '0.75rem 1.5rem' }}
+                    >
+                      Apply Now
+                    </a>
+                  )}
+                </div>
+              </div>
+              
+              {grant.eligibility && grant.eligibility.length > 0 && (
+                <div style={{ marginTop: '1.5rem' }}>
+                  <h4 style={{ 
+                    color: 'var(--text-primary)', 
+                    fontSize: '1rem', 
+                    margin: '0 0 0.75rem 0',
+                    fontWeight: '600'
+                  }}>
+                    Eligibility Requirements:
+                  </h4>
+                  <ul style={{ 
+                    margin: 0, 
+                    paddingLeft: '1.5rem',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.6
+                  }}>
+                    {grant.eligibility.map((requirement, index) => (
+                      <li key={index} style={{ marginBottom: '0.25rem' }}>
+                        {requirement}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ))
+        )}
       </div>
-      
-      {grants.length === 0 && !loading && (
-        <div style={{
-          backgroundColor: 'var(--dark-secondary)',
-          padding: '3rem',
-          borderRadius: 'var(--border-radius)',
-          textAlign: 'center',
-          color: 'var(--text-secondary)'
-        }}>
-          <p style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>
-            No grants found. Try adjusting your search criteria.
-          </p>
-          <p style={{ fontSize: '0.9rem' }}>
-            Use the search form above to find grants and funding opportunities specific to your business.
-          </p>
-        </div>
-      )}
-
-      {loading && (
-        <div style={{
-          backgroundColor: 'var(--dark-secondary)',
-          padding: '3rem',
-          borderRadius: 'var(--border-radius)',
-          textAlign: 'center',
-          color: 'var(--text-secondary)'
-        }}>
-          <p>Searching for grants...</p>
-        </div>
-      )}
     </div>
   );
 }

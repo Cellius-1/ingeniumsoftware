@@ -15,6 +15,7 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+.env*.local
 
 # IDE
 .vscode/
@@ -55,3 +56,13 @@ dist/
 *.backup
 *.bak
 *.tmp
+
+# Security
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Local development
+.env.example

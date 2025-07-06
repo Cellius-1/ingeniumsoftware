@@ -4,7 +4,6 @@ const nextConfig = {
     domains: ['firebasestorage.googleapis.com'],
     formats: ['image/webp', 'image/avif'],
   },
-  swcMinify: false, // Disable SWC if having issues
   compiler: {
     // Remove any SWC compilation issues
     removeConsole: process.env.NODE_ENV === 'production',

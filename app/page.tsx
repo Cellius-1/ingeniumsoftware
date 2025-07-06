@@ -1,6 +1,24 @@
+'use client';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function HomePage() {
+  const { user } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (user) {
+      router.push('/dashboard');
+    }
+  }, [user, router]);
+
+  // Don't render the homepage content if user is signed in (will redirect)
+  if (user) {
+    return null;
+  }
+
   return (
     <div className="home-page">
       {/* Hero Section */}

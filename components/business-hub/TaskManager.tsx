@@ -1,47 +1,84 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { taskService } from '@/lib/database';
+import type { Database } from '@/lib/supabase';
 
-interface Task {
-  id: string;
-  title: string;
-  description: string;
-  completed: boolean;
-  priority: 'low' | 'medium' | 'high';
-  dueDate: string;
-  createdAt: Date;
-}
+type Task = Database['public']['Tables']['tasks']['Row'];
 
 export default function TaskManager() {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
     priority: 'medium' as const,
-    dueDate: ''
+    due_date: ''
   });
 
+  useEffect(() => {
+    if (user) {
+      loadTasks();
+    }
+  }, [user]);
+
+  const loadTasks = async () => {
+    if (!user) return;
+    
+    try {
+      setLoading(true);
+      const data = await taskService.getTasks(user.id);
+      setTasks(data);
+    } catch (error) {
+      console.error('Error loading tasks:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const addTask = async () => {
-    if (!newTask.title) return;
+    if (!newTask.title || !user) return;
 
-    const task: Task = {
-      id: Date.now().toString(),
-      ...newTask,
-      completed: false,
-      createdAt: new Date()
-    };
+    try {
+      const task = await taskService.createTask({
+        user_id: user.id,
+        title: newTask.title,
+        description: newTask.description,
+        priority: newTask.priority,
+        due_date: newTask.due_date,
+        completed: false
+      });
 
-    setTasks([...tasks, task]);
-    setNewTask({ title: '', description: '', priority: 'medium', dueDate: '' });
+      setTasks([task, ...tasks]);
+      setNewTask({ title: '', description: '', priority: 'medium', due_date: '' });
+    } catch (error) {
+      console.error('Error creating task:', error);
+    }
   };
 
   const toggleTask = async (taskId: string) => {
-    setTasks(tasks.map(task => 
-      task.id === taskId ? { ...task, completed: !task.completed } : task
-    ));
+    try {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      const updatedTask = await taskService.updateTask(taskId, {
+        completed: !task.completed
+      });
+
+      setTasks(tasks.map(t => t.id === taskId ? updatedTask : t));
+    } catch (error) {
+      console.error('Error updating task:', error);
+    }
   };
 
   const deleteTask = async (taskId: string) => {
-    setTasks(tasks.filter(task => task.id !== taskId));
+    try {
+      await taskService.deleteTask(taskId);
+      setTasks(tasks.filter(task => task.id !== taskId));
+    } catch (error) {
+      console.error('Error deleting task:', error);
+    }
   };
 
   const getPriorityColor = (priority: string) => {
@@ -53,26 +90,34 @@ export default function TaskManager() {
     }
   };
 
-  return (
-    <div>
-      {/* Add New Task Form */}
+  if (loading) {
+    return (
       <div style={{
         backgroundColor: 'var(--dark-secondary)',
         padding: '2rem',
         borderRadius: 'var(--border-radius)',
-        marginBottom: '2rem',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+        textAlign: 'center'
+      }}>
+        <p style={{ color: 'var(--text-secondary)' }}>Loading tasks...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem' }}>
+      {/* Add Task Form */}
+      <div style={{
+        backgroundColor: 'var(--dark-secondary)',
+        padding: '2rem',
+        borderRadius: 'var(--border-radius)',
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
       }}>
         <h2 style={{ color: 'var(--text-primary)', marginBottom: '1.5rem', fontSize: '1.25rem' }}>
           Add New Task
         </h2>
         
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-          gap: '1rem',
-          marginBottom: '1rem'
-        }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <input
             type="text"
             placeholder="Task title"
@@ -85,6 +130,22 @@ export default function TaskManager() {
               backgroundColor: 'rgba(255, 255, 255, 0.05)',
               color: 'var(--text-primary)',
               fontSize: '0.95rem'
+            }}
+          />
+          
+          <textarea
+            placeholder="Task description"
+            value={newTask.description}
+            onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+            style={{
+              padding: '0.75rem',
+              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              color: 'var(--text-primary)',
+              fontSize: '0.95rem',
+              minHeight: '100px',
+              resize: 'vertical'
             }}
           />
           
@@ -107,8 +168,8 @@ export default function TaskManager() {
           
           <input
             type="date"
-            value={newTask.dueDate}
-            onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+            value={newTask.due_date}
+            onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })}
             style={{
               padding: '0.75rem',
               borderRadius: '8px',
@@ -122,131 +183,115 @@ export default function TaskManager() {
           <button
             onClick={addTask}
             className="cta-button"
-            style={{ margin: 0, width: '100%' }}
+            style={{ margin: 0 }}
           >
             Add Task
           </button>
         </div>
-        
-        <textarea
-          placeholder="Task description (optional)"
-          value={newTask.description}
-          onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-          style={{
-            width: '100%',
-            padding: '0.75rem',
-            borderRadius: '8px',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-            color: 'var(--text-primary)',
-            fontSize: '0.95rem',
-            minHeight: '80px',
-            resize: 'vertical',
-            fontFamily: 'inherit'
-          }}
-          rows={3}
-        />
       </div>
 
       {/* Tasks List */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div style={{
+        backgroundColor: 'var(--dark-secondary)',
+        padding: '2rem',
+        borderRadius: 'var(--border-radius)',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)'
+      }}>
+        <h2 style={{ color: 'var(--text-primary)', marginBottom: '1.5rem', fontSize: '1.25rem' }}>
+          Your Tasks ({tasks.length})
+        </h2>
+        
         {tasks.length === 0 ? (
-          <div style={{
-            backgroundColor: 'var(--dark-secondary)',
-            padding: '3rem',
-            borderRadius: 'var(--border-radius)',
-            textAlign: 'center',
-            color: 'var(--text-secondary)'
-          }}>
-            <p>No tasks yet. Add your first task above!</p>
-          </div>
+          <p style={{ color: 'var(--text-secondary)', textAlign: 'center', marginTop: '2rem' }}>
+            No tasks yet. Add your first task to get started!
+          </p>
         ) : (
-          tasks.map((task) => (
-            <div key={task.id} style={{
-              backgroundColor: 'var(--dark-secondary)',
-              padding: '1.5rem',
-              borderRadius: 'var(--border-radius)',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '1rem',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
-              transition: 'transform 0.2s ease',
-            }}>
-              <input
-                type="checkbox"
-                checked={task.completed}
-                onChange={() => toggleTask(task.id)}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {tasks.map((task) => (
+              <div
+                key={task.id}
                 style={{
-                  width: '18px',
-                  height: '18px',
-                  marginTop: '2px',
-                  accentColor: 'var(--purple-primary)'
-                }}
-              />
-              
-              <div style={{ flex: 1 }}>
-                <h3 style={{
-                  color: 'var(--text-primary)',
-                  fontSize: '1.1rem',
-                  marginBottom: '0.5rem',
-                  textDecoration: task.completed ? 'line-through' : 'none',
-                  opacity: task.completed ? 0.6 : 1
-                }}>
-                  {task.title}
-                </h3>
-                
-                {task.description && (
-                  <p style={{
-                    color: 'var(--text-secondary)',
-                    fontSize: '0.9rem',
-                    marginBottom: '0.75rem',
-                    lineHeight: 1.5
-                  }}>
-                    {task.description}
-                  </p>
-                )}
-                
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                  <span style={{
-                    backgroundColor: getPriorityColor(task.priority),
-                    color: 'white',
-                    padding: '0.25rem 0.75rem',
-                    borderRadius: '12px',
-                    fontSize: '0.8rem',
-                    fontWeight: '500',
-                    textTransform: 'capitalize'
-                  }}>
-                    {task.priority}
-                  </span>
-                  
-                  {task.dueDate && (
-                    <span style={{
-                      color: 'var(--text-secondary)',
-                      fontSize: '0.85rem'
-                    }}>
-                      Due: {new Date(task.dueDate).toLocaleDateString()}
-                    </span>
-                  )}
-                </div>
-              </div>
-              
-              <button
-                onClick={() => deleteTask(task.id)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#ff3b30',
-                  cursor: 'pointer',
-                  padding: '0.5rem',
-                  borderRadius: '4px',
-                  fontSize: '0.9rem',
-                  transition: 'opacity 0.2s ease'
+                  padding: '1rem',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  transition: 'all 0.3s ease'
                 }}
               >
-                Delete
-              </button>
-            </div>
-          ))
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={task.completed}
+                    onChange={() => toggleTask(task.id)}
+                    style={{
+                      marginTop: '0.25rem',
+                      transform: 'scale(1.2)'
+                    }}
+                  />
+                  
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
+                      <h3 style={{
+                        color: task.completed ? 'var(--text-secondary)' : 'var(--text-primary)',
+                        margin: 0,
+                        fontSize: '1rem',
+                        fontWeight: '600',
+                        textDecoration: task.completed ? 'line-through' : 'none'
+                      }}>
+                        {task.title}
+                      </h3>
+                      
+                      <span style={{
+                        padding: '0.25rem 0.5rem',
+                        borderRadius: '4px',
+                        fontSize: '0.75rem',
+                        fontWeight: '600',
+                        backgroundColor: getPriorityColor(task.priority),
+                        color: 'white'
+                      }}>
+                        {task.priority}
+                      </span>
+                    </div>
+                    
+                    {task.description && (
+                      <p style={{
+                        color: 'var(--text-secondary)',
+                        fontSize: '0.9rem',
+                        margin: '0 0 0.5rem 0',
+                        textDecoration: task.completed ? 'line-through' : 'none'
+                      }}>
+                        {task.description}
+                      </p>
+                    )}
+                    
+                    {task.due_date && (
+                      <p style={{
+                        color: 'var(--text-secondary)',
+                        fontSize: '0.8rem',
+                        margin: 0
+                      }}>
+                        Due: {new Date(task.due_date).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                  
+                  <button
+                    onClick={() => deleteTask(task.id)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#ff3b30',
+                      cursor: 'pointer',
+                      fontSize: '1.2rem',
+                      padding: '0.25rem'
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>

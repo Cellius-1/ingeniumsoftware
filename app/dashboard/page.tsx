@@ -4,6 +4,7 @@ import DashboardStats from '@/components/dashboard/DashboardStats';
 import RecentTasks from '@/components/dashboard/RecentTasks';
 import UpcomingEvents from '@/components/dashboard/UpcomingEvents';
 import FundingProgress from '@/components/dashboard/FundingProgress';
+import Link from 'next/link';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -24,9 +25,9 @@ export default function Dashboard() {
           <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
             Please log in to access your dashboard and manage your business tools.
           </p>
-          <button className="cta-button" style={{ margin: 0 }}>
+          <Link href="/sign-in" className="cta-button" style={{ margin: 0 }}>
             Sign In
-          </button>
+          </Link>
         </div>
       </section>
     );
