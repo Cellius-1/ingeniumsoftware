@@ -1,363 +1,272 @@
 import { supabase } from './supabase';
 import type { Database } from './supabase';
 
-type Tables = Database['public']['Tables'];
+type Task = Database['public']['Tables']['tasks']['Row'];
+type TaskInsert = Database['public']['Tables']['tasks']['Insert'];
+type TaskUpdate = Database['public']['Tables']['tasks']['Update'];
 
-// Helper function to check if Supabase is properly configured
+type Grant = Database['public']['Tables']['grants']['Row'];
+
+// Mock data for development when Supabase is not configured
+const mockTasks: Task[] = [
+  {
+    id: '1',
+    user_id: 'mock-user',
+    title: 'Complete project proposal',
+    description: 'Write and submit the Q1 project proposal',
+    completed: false,
+    priority: 'high',
+    due_date: '2024-02-15',
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z'
+  },
+  {
+    id: '2',
+    user_id: 'mock-user',
+    title: 'Review budget allocations',
+    description: 'Review and approve budget for new initiatives',
+    completed: true,
+    priority: 'medium',
+    due_date: '2024-02-10',
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z'
+  }
+];
+
+const mockGrants: Grant[] = [
+  {
+    id: '1',
+    title: 'Small Business Innovation Research (SBIR)',
+    description: 'Federal funding program supporting small businesses engaged in research and development with commercialization potential.',
+    amount: '$50,000 - $1,500,000',
+    deadline: '2024-03-15',
+    state: 'National',
+    category: 'Technology',
+    url: 'https://www.sbir.gov',
+    eligibility: [
+      'Small business with fewer than 500 employees',
+      'US-based company',
+      'Research & development focus',
+      'Commercialization potential'
+    ],
+    created_at: '2024-01-01T00:00:00Z'
+  },
+  {
+    id: '2',
+    title: 'California Clean Energy Fund',
+    description: 'State funding for clean energy innovations and sustainable technology startups.',
+    amount: '$25,000 - $500,000',
+    deadline: '2024-04-30',
+    state: 'California',
+    category: 'Environment',
+    url: 'https://www.cacleanenergy.org',
+    eligibility: [
+      'California-based business',
+      'Clean energy focus',
+      'Early-stage company',
+      'Environmental impact potential'
+    ],
+    created_at: '2024-01-01T00:00:00Z'
+  },
+  {
+    id: '3',
+    title: 'Texas Economic Development Grant',
+    description: 'Supporting Texas businesses with job creation and economic development initiatives.',
+    amount: '$10,000 - $250,000',
+    deadline: '2024-05-15',
+    state: 'Texas',
+    category: 'Small Business',
+    url: 'https://www.texasedc.org',
+    eligibility: [
+      'Texas-based business',
+      'Job creation commitment',
+      'Economic development impact',
+      'Local community benefit'
+    ],
+    created_at: '2024-01-01T00:00:00Z'
+  }
+];
+
+// Check if Supabase is properly configured
 const isSupabaseConfigured = () => {
-  return process.env.NEXT_PUBLIC_SUPABASE_URL && 
-         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
-         process.env.NEXT_PUBLIC_SUPABASE_URL !== 'your_supabase_project_url_here';
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  return url && 
+         key &&
+         url !== 'your_supabase_project_url_here' &&
+         url.startsWith('https://') &&
+         url.includes('.supabase.co');
 };
 
-// Task functions
+// Task Service
 export const taskService = {
-  async getTasks(userId: string) {
+  async getTasks(userId: string): Promise<Task[]> {
     if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - returning empty array');
-      return [];
+      console.warn('Using mock task data - Supabase not configured');
+      return mockTasks.filter(task => task.user_id === userId || task.user_id === 'mock-user');
     }
 
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
       console.error('Error fetching tasks:', error);
-      return [];
+      return mockTasks;
     }
-    return data || [];
   },
 
-  async createTask(task: Tables['tasks']['Insert']) {
+  async createTask(task: TaskInsert): Promise<Task> {
     if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - task not saved');
-      return null;
+      console.warn('Using mock task creation - Supabase not configured');
+      const newTask: Task = {
+        id: Date.now().toString(),
+        ...task,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        completed: task.completed || false,
+        description: task.description || '',
+        priority: task.priority || 'medium',
+        due_date: task.due_date || ''
+      };
+      mockTasks.unshift(newTask);
+      return newTask;
     }
 
-    const { data, error } = await supabase
-      .from('tasks')
-      .insert(task)
-      .select()
-      .single();
-    
-    if (error) {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert([task])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
       console.error('Error creating task:', error);
       throw error;
     }
-    return data;
   },
 
-  async updateTask(id: string, updates: Partial<Tables['tasks']['Update']>) {
+  async updateTask(id: string, updates: TaskUpdate): Promise<Task> {
     if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - task not updated');
-      return null;
+      console.warn('Using mock task update - Supabase not configured');
+      const taskIndex = mockTasks.findIndex(task => task.id === id);
+      if (taskIndex !== -1) {
+        mockTasks[taskIndex] = {
+          ...mockTasks[taskIndex],
+          ...updates,
+          updated_at: new Date().toISOString()
+        };
+        return mockTasks[taskIndex];
+      }
+      throw new Error('Task not found');
     }
 
-    const { data, error } = await supabase
-      .from('tasks')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
       console.error('Error updating task:', error);
       throw error;
     }
-    return data;
   },
 
-  async deleteTask(id: string) {
+  async deleteTask(id: string): Promise<void> {
     if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - task not deleted');
+      console.warn('Using mock task deletion - Supabase not configured');
+      const taskIndex = mockTasks.findIndex(task => task.id === id);
+      if (taskIndex !== -1) {
+        mockTasks.splice(taskIndex, 1);
+      }
       return;
     }
 
-    const { error } = await supabase
-      .from('tasks')
-      .delete()
-      .eq('id', id);
-    
-    if (error) {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
       console.error('Error deleting task:', error);
       throw error;
     }
   }
 };
 
-// Event functions
-export const eventService = {
-  async getEvents(userId: string) {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - returning empty array');
-      return [];
-    }
-
-    const { data, error } = await supabase
-      .from('events')
-      .select('*')
-      .eq('user_id', userId)
-      .order('date', { ascending: true });
-    
-    if (error) {
-      console.error('Error fetching events:', error);
-      return [];
-    }
-    return data || [];
-  },
-
-  async createEvent(event: Tables['events']['Insert']) {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - event not saved');
-      return null;
-    }
-
-    const { data, error } = await supabase
-      .from('events')
-      .insert(event)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating event:', error);
-      throw error;
-    }
-    return data;
-  },
-
-  async updateEvent(id: string, updates: Partial<Tables['events']['Update']>) {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - event not updated');
-      return null;
-    }
-
-    const { data, error } = await supabase
-      .from('events')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating event:', error);
-      throw error;
-    }
-    return data;
-  },
-
-  async deleteEvent(id: string) {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - event not deleted');
-      return;
-    }
-
-    const { error } = await supabase
-      .from('events')
-      .delete()
-      .eq('id', id);
-    
-    if (error) {
-      console.error('Error deleting event:', error);
-      throw error;
-    }
-  }
-};
-
-// Grant functions
+// Grant Service
 export const grantService = {
   async getGrants(filters?: {
     state?: string;
     category?: string;
     search?: string;
-  }) {
+  }): Promise<Grant[]> {
     if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - returning sample grants');
-      // Return sample data for development
-      return [
-        {
-          id: '1',
-          title: 'Small Business Innovation Research (SBIR)',
-          description: 'Federal funding program for small businesses to engage in Research and Development with the potential for commercialization.',
-          amount: '$50,000 - $1,500,000',
-          deadline: '2024-03-15',
-          eligibility: ['Small business with <500 employees', 'US-based company', 'R&D focus'],
-          state: 'National',
-          category: 'Technology',
-          url: 'https://www.sbir.gov',
-          created_at: new Date().toISOString()
-        },
-        {
-          id: '2',
-          title: 'State Small Business Credit Initiative',
-          description: 'Program designed to strengthen state programs that support lending to small businesses.',
-          amount: '$10,000 - $500,000',
-          deadline: '2024-04-30',
-          eligibility: ['Small business', 'State-specific requirements', 'Good credit history'],
-          state: 'Various States',
-          category: 'Small Business',
-          url: 'https://www.treasury.gov/sbci',
-          created_at: new Date().toISOString()
-        }
-      ];
+      console.warn('Using mock grant data - Supabase not configured');
+      let filteredGrants = [...mockGrants];
+
+      if (filters?.state) {
+        filteredGrants = filteredGrants.filter(grant => 
+          grant.state === filters.state || grant.state === 'National'
+        );
+      }
+
+      if (filters?.category) {
+        filteredGrants = filteredGrants.filter(grant => 
+          grant.category === filters.category
+        );
+      }
+
+      if (filters?.search) {
+        const searchLower = filters.search.toLowerCase();
+        filteredGrants = filteredGrants.filter(grant =>
+          grant.title.toLowerCase().includes(searchLower) ||
+          grant.description.toLowerCase().includes(searchLower)
+        );
+      }
+
+      return filteredGrants;
     }
 
-    let query = supabase.from('grants').select('*');
-    
-    if (filters?.state) {
-      query = query.eq('state', filters.state);
-    }
-    
-    if (filters?.category) {
-      query = query.eq('category', filters.category);
-    }
-    
-    if (filters?.search) {
-      query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
-    }
-    
-    const { data, error } = await query.order('created_at', { ascending: false });
-    
-    if (error) {
+    try {
+      let query = supabase.from('grants').select('*');
+
+      if (filters?.state) {
+        query = query.or(`state.eq.${filters.state},state.eq.National`);
+      }
+
+      if (filters?.category) {
+        query = query.eq('category', filters.category);
+      }
+
+      if (filters?.search) {
+        query = query.or(
+          `title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
+        );
+      }
+
+      const { data, error } = await query.order('deadline', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
       console.error('Error fetching grants:', error);
-      return [];
-    }
-    return data || [];
-  },
-
-  async createGrant(grant: Tables['grants']['Insert']) {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - grant not saved');
-      return null;
-    }
-
-    const { data, error } = await supabase
-      .from('grants')
-      .insert(grant)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating grant:', error);
-      throw error;
-    }
-    return data;
-  },
-
-  async updateGrant(id: string, updates: Partial<Tables['grants']['Update']>) {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - grant not updated');
-      return null;
-    }
-
-    const { data, error } = await supabase
-      .from('grants')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating grant:', error);
-      throw error;
-    }
-    return data;
-  },
-
-  async deleteGrant(id: string) {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - grant not deleted');
-      return;
-    }
-
-    const { error } = await supabase
-      .from('grants')
-      .delete()
-      .eq('id', id);
-    
-    if (error) {
-      console.error('Error deleting grant:', error);
-      throw error;
+      return mockGrants;
     }
   }
 };
-
-// Application functions
-export const applicationService = {
-  async getApplications(userId: string) {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - returning empty array');
-      return [];
-    }
-
-    const { data, error } = await supabase
-      .from('applications')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching applications:', error);
-      return [];
-    }
-    return data || [];
-  },
-
-  async createApplication(application: Tables['applications']['Insert']) {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - application not saved');
-      return null;
-    }
-
-    const { data, error } = await supabase
-      .from('applications')
-      .insert(application)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating application:', error);
-      throw error;
-    }
-    return data;
-  },
-
-  async updateApplication(id: string, updates: Partial<Tables['applications']['Update']>) {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - application not updated');
-      return null;
-    }
-
-    const { data, error } = await supabase
-      .from('applications')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating application:', error);
-      throw error;
-    }
-    return data;
-  },
-
-  async deleteApplication(id: string) {
-    if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured - application not deleted');
-      return;
-    }
-
-    const { error } = await supabase
-      .from('applications')
-      .delete()
-      .eq('id', id);
-    
-    if (error) {
-      console.error('Error deleting application:', error);
-      throw error;
-    }
-  }
-}; 
